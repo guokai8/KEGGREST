@@ -9,7 +9,7 @@
 Clone the repository and install with:
 
 ```bash
-git clone https://github.com/yourusername/KEGGREST.git
+git clone https://github.com/guokai8/KEGGREST.git
 cd KEGGREST
 pip install -e .
 ```
