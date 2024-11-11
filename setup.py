@@ -10,7 +10,11 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/guokai8/KEGGREST",
     packages=find_packages(),
-    install_requires=["requests", "re", "pandas", "collections", "urllib"],  # Add other dependencies here
+    install_requires=[
+        "requests",
+        "numpy",
+        "pandas"
+    ],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
