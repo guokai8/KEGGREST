@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="KEGGRESTpy",
-    version="0.1.1",
+    version="0.1.2",
     author="Kai Guo",
     author_email="guokai8@gmail.com",
     description="A Python wrapper for accessing KEGG REST API, inspired by KEGGREST in Bioconductor",
