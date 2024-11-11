@@ -1,5 +1,1 @@
 requests
-re
-numpy
-pandas
-urllib3
