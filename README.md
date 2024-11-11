@@ -36,7 +36,6 @@ print(list_databases())
 To list all organisms in KEGG:
 
 ```
-Copy code
 from KEGGREST import kegg_list
 
 organisms = kegg_list("organism")
