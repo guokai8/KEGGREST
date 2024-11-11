@@ -39,7 +39,7 @@ To list all organisms in KEGG:
 from KEGGREST import kegg_list
 
 pathway = kegg_list("pathway")
-print(pathway.head())
+print(pathway)
 ```
 ### 2. Retrieving Specific Entries with kegg_get()
 To retrieve detailed information about specific entries in KEGG, such as genes:
