@@ -38,8 +38,8 @@ To list all organisms in KEGG:
 ```
 from KEGGREST import kegg_list
 
-organisms = kegg_list("organism")
-print(organisms.head())
+pathway = kegg_list("pathway")
+print(pathway.head())
 ```
 ### 2. Retrieving Specific Entries with kegg_get()
 To retrieve detailed information about specific entries in KEGG, such as genes:
