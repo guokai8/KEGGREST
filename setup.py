@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="KEGGREST",
-    version="0.1",
+    version="0.11",
     description="A Python package for interacting with the KEGG REST API",
     author="Kai Guo",
     author_email="guokai8@gmail.com",
