@@ -3,6 +3,15 @@ import re
 import urllib.parse
 
 # Default URLs
+def clean_url(url):
+    url = url.replace(" ", "%20").replace("#", "%23").replace(":", "%3a")
+    return url
+
+def get_request(url):
+    response = requests.get(url)
+    response.raise_for_status()
+    return response.text
+
 def get_root_url():
     """Get the root KEGG REST URL."""
     return "https://rest.kegg.jp"
