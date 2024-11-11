@@ -3,48 +3,34 @@ import re
 import numpy as np
 import pandas as pd
 from collections import defaultdict
-
-# Utility functions for KEGG URL handling and fetching data
-def get_root_url():
-    return "https://rest.kegg.jp"
-
-def get_genome_url():
-    return "http://rest.genome.jp"
-
-def clean_url(url):
-    """Clean the URL by encoding specific characters."""
-    url = re.sub(r" ", "%20", url)
-    url = re.sub(r"#", "%23", url)
-    url = re.sub(r":", "%3a", url)
-    return re.sub(r"http(s)*%3a//", r"http\1://", url)
-
-def fetch_url(url, parser=None, debug=False):
-    """Fetch content from a URL and optionally parse it."""
-    url = clean_url(url)
-    if debug:
-        print(f"Fetching URL: {url}")
-    
-    response = requests.get(url)
-    response.raise_for_status()
-    
-    content = response.text.strip()
-    return parser(content) if parser else content
+from .parser import matrix_parser, organism_list_parser, get_parser_list, get_parser_entry, get_parser_key_value, get_parser_list_or_key_value, get_parser_biostring,flat_file_parser, get_parser_name, get_parse_biostring, text_parser, list_parser
+from .utils import get_root_url, get_genome_url, print_message, list_databases, get_request, clean_url, fetch_url, rstrip, strip, lstrip, get_kegg_pathway_image_url, split_in_groups
 
 # Function to get KEGG information about a database
 def kegg_info(database):
     url = f"{get_root_url()}/info/{database}"
     return fetch_url(url, lambda x: x)
 
-# Function to get list of pathways or organisms
 def kegg_list(database, organism=None):
-    if isinstance(database, list):
-        database = "+".join(database)
+    """Fetch KEGG list data for a specified database and optional organism."""
+    database = "+".join(database) if isinstance(database, list) else database
     if organism:
         url = f"{get_root_url()}/list/{database}/{organism}"
     else:
         url = f"{get_root_url()}/list/{database}"
-    return fetch_url(url, parse_list)
+    
+    # Make the GET request to fetch data
+    response = requests.get(url)
+    response.raise_for_status()  # Raises an error for failed requests
 
+    # Use organism-specific parsing if the database is "organism"
+    if database == "organism":
+        return organism_list_parser(response.text)
+    
+    # For other databases, return a dictionary of entries
+    return list_parser(response.text, name_column=1, value_column=2)
+    
+    
 # Function to find KEGG entries based on a query
 def kegg_find(database, query, option=None):
     query = re.sub(r"\s", "+", query)

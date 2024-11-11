@@ -2,23 +2,29 @@ import requests
 import re
 import urllib.parse
 
-# Default URLs
-def clean_url(url):
-    url = url.replace(" ", "%20").replace("#", "%23").replace(":", "%3a")
-    return url
+def get_root_url():
+    return "https://rest.kegg.jp"
+
+def get_genome_url():
+    return "http://rest.genome.jp"
+
+def print_message(*args):
+    """Print formatted message without quotes."""
+    print(" ".join(map(str, args)))
+
+def list_databases():
+    """List all KEGG databases available for queries."""
+    return [
+        "pathway", "brite", "module", "ko", "genome", "vg",
+        "ag", "compound", "glycan", "reaction", "rclass",
+        "enzyme", "disease", "drug", "dgroup", "environ",
+        "genes", "ligand", "kegg"
+    ]
 
 def get_request(url):
     response = requests.get(url)
     response.raise_for_status()
     return response.text
-
-def get_root_url():
-    """Get the root KEGG REST URL."""
-    return "https://rest.kegg.jp"
-
-def get_genome_url():
-    """Get the KEGG Genome URL."""
-    return "http://rest.genome.jp"
 
 def print_message(*args):
     """Print formatted message without quotes."""

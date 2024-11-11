@@ -4,35 +4,6 @@ import numpy as np
 import pandas as pd
 from collections import defaultdict
 
-def get_root_url():
-    return "https://rest.kegg.jp"
-
-def get_genome_url():
-    return "http://rest.genome.jp"
-
-def print_message(*args):
-    """Print formatted message without quotes."""
-    print(" ".join(map(str, args)))
-
-def clean_url(url):
-    """Clean the URL by encoding specific characters."""
-    url = re.sub(r" ", "%20", url)
-    url = re.sub(r"#", "%23", url)
-    url = re.sub(r":", "%3a", url)
-    return re.sub(r"http(s)*%3a//", r"http\1://", url)
-
-def fetch_url(url, parser=None, debug=False):
-    """Fetch content from a URL and optionally parse it."""
-    url = clean_url(url)
-    if debug:
-        print_message("URL:", url)
-    
-    response = requests.get(url)
-    response.raise_for_status()
-    
-    content = response.text.strip()
-    return parser(content) if parser else content
-
 # Parsers
 def matrix_parser(txt, ncol):
     """Parse text into an n x ncol matrix."""
@@ -50,9 +21,56 @@ def organism_list_parser(url):
     df = pd.DataFrame(split_data, columns=["T.number", "organism", "species", "phylogeny"])
     return df
 
-def get_parser_name(entry):
-    """Clean and parse the NAME field."""
-    return {k: v.strip(";") for k, v in entry.items()}
+class FlatFileRecordGen:
+    def __init__(self):
+        self.fields = defaultdict(list)
+        self.references = []
+        self.last_field = None
+        self.last_subfield = None
+        self.current_reference = {}
+
+    def set_field(self, field):
+        """Sets a new field, flushing previous data if necessary."""
+        self.flush()  # Save any previous data before setting a new field
+        self.last_field = field
+        self.last_subfield = None
+
+    def set_subfield(self, subfield):
+        """Sets a subfield within the current field."""
+        self.last_subfield = subfield
+
+    def set_body(self, body):
+        """Sets the body content for the current field or subfield."""
+        if self.last_field == "REFERENCE":
+            # Handling REFERENCE-specific data
+            if self.last_subfield:
+                self.current_reference.setdefault(self.last_subfield, []).append(body)
+            else:
+                self.current_reference.setdefault(self.last_field, []).append(body)
+        else:
+            # General handling for other fields
+            if self.last_subfield:
+                self.fields[self.last_field].setdefault(self.last_subfield, []).append(body)
+            else:
+                self.fields[self.last_field].append(body)
+
+    def flush(self):
+        """Flushes the current reference if it exists."""
+        if self.current_reference:
+            self.references.append(self.current_reference)
+            self.current_reference = {}
+
+    def get_fields(self):
+        """Returns all fields, including references."""
+        fields = dict(self.fields)
+        if self.references:
+            fields["REFERENCE"] = self.references
+        return fields
+
+
+# Parser functions to handle different field types
+def get_parser_list(entry):
+    return re.split(r" {2,}", entry.strip())
 
 def get_parser_entry(entry):
     """Parse the ENTRY field."""
@@ -75,7 +93,6 @@ def get_parser_reference(refs):
     return parsed_references
 
 def get_parser_key_value(entry):
-    """Parse key-value data structure."""
     content = {}
     lines = entry.strip().split("\n")
     for line in lines:
@@ -85,41 +102,95 @@ def get_parser_key_value(entry):
             content[key.strip()] = value.strip()
     return content
 
-def get_parser_list(entry):
-    """Parse list-like structure from the entry."""
-    return re.split(r" {2,}", entry.strip())
-
 def get_parser_list_or_key_value(entry):
-    """Parse as list or key-value based on content structure."""
     if re.search(r" {2,}", entry):
         return get_parser_key_value(entry)
     return get_parser_list(entry)
 
+def get_parser_biostring(entry, type):
+    """Parse a sequence entry, returning an amino acid or nucleotide string."""
+    seq = "".join(entry[1:]).replace("\n", "")
+    if type == "AAStringSet":
+        return f"AAStringSet({seq})"
+    elif type == "DNAStringSet":
+        return f"DNAStringSet({seq})"
+    return seq
+
+
+# Main flat file parser function
 def flat_file_parser(txt):
-    """Parse KEGG flat files."""
     lines = txt.strip().split("\n")
-    entry_data = defaultdict(list)
-    current_key = None
-    current_subfield = None
+    all_entries = []
+    ffrec = FlatFileRecordGen()
 
     for line in lines:
-        if line.startswith("///"):
-            entry_data["///"] = "End of Entry"
+        if line == "///":
+            # Flush entry when end marker is encountered
+            ffrec.flush()
+            for name, item in ffrec.get_fields().items():
+                # Apply specific parsing functions based on field name
+                if name == "ENTRY":
+                    ffrec.set_field("ENTRY")
+                    ffrec.set_body(get_parser_entry(item))
+                elif name in {"ENZYME", "MARKER", "ALL_REAC", "RELATEDPAIR", "DBLINKS", "DRUG", "GENE"}:
+                    ffrec.set_field(name)
+                    ffrec.set_body(get_parser_list(item))
+                elif name in {"PATHWAY", "ORTHOLOGY", "PATHWAY_MAP", "MODULE", "DISEASE", "REL_PATHWAY", "COMPOUND", "REACTION", "ORGANISM"}:
+                    ffrec.set_field(name)
+                    ffrec.set_body(get_parser_key_value(item))
+                elif name == "REACTION":
+                    ffrec.set_field(name)
+                    ffrec.set_body(get_parser_list_or_key_value(item))
+                
+                # Handle single-item lists
+                if isinstance(item, list) and len(item) == 1:
+                    ffrec.set_field(name)
+                    ffrec.set_body(item[0])
+
+            # Process sequences
+            if "NTSEQ" in ffrec.get_fields():
+                ffrec.set_field("NTSEQ")
+                ffrec.set_body(get_parser_biostring(ffrec.get_fields()["NTSEQ"], "DNAStringSet"))
+            if "AASEQ" in ffrec.get_fields():
+                ffrec.set_field("AASEQ")
+                ffrec.set_body(get_parser_biostring(ffrec.get_fields()["AASEQ"], "AAStringSet"))
+
+            # Append the fully parsed entry to the list of all entries
+            all_entries.append(ffrec.get_fields())
+            ffrec = FlatFileRecordGen()  # Start a new record
             continue
 
+        # Remove trailing whitespace from line
         line = line.rstrip()
         if not line.startswith(" "):  # New field
             parts = line.split(maxsplit=1)
-            current_key = parts[0]
-            current_subfield = None
-            entry_data[current_key] = []
+            field = parts[0]
+            ffrec.set_field(field)
             if len(parts) > 1:
-                entry_data[current_key].append(parts[1])
-        else:  # Continuation of previous field
-            if current_key:
-                entry_data[current_key].append(line.strip())
+                ffrec.set_body(parts[1])
+        else:  # Continuation or subfield
+            content = line.strip()
+            if content:
+                ffrec.set_body(content)
 
-    return entry_data
+    return all_entries
+
+def get_parser_name(entry):
+    """Clean and parse the NAME field."""
+    return {k: v.strip(";") for k, v in entry.items()}
+
+
+def get_parse_biostring(entry, seq_type):
+    """
+    Parse biostrings (DNA or amino acid sequences) from KEGG entries.
+    """
+    sequence = "".join(entry[1:]).replace("\n", "")
+    if seq_type == "AAStringSet":
+        return sequence  # Amino Acid Sequence as string
+    elif seq_type == "DNAStringSet":
+        return sequence  # DNA Sequence as string
+    else:
+        raise ValueError("Invalid sequence type. Use 'AAStringSet' or 'DNAStringSet'.")
 
 def list_parser(txt, value_column, name_column=None):
     """Parse list data into a dictionary with specified columns as keys and values."""
@@ -137,6 +208,9 @@ def list_parser(txt, value_column, name_column=None):
                 parsed_data[len(parsed_data)] = value
 
     return parsed_data
+    
+    
+
 
 def text_parser(txt):
     """Simply return the text as is."""
